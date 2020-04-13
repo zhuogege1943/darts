@@ -18,7 +18,7 @@ from model import NetworkCIFAR as Network
 
 parser = argparse.ArgumentParser("cifar")
 parser.add_argument('--data', type=str, default='../data', help='location of the data corpus')
-parser.add_argument('--batch_size', type=int, default=96, help='batch size')
+parser.add_argument('--batch_size', type=int, default=64, help='batch size')
 parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
 parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
 parser.add_argument('--init_channels', type=int, default=36, help='num of init channels')
@@ -89,9 +89,9 @@ def infer(test_queue, model, criterion):
 
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
     n = input.size(0)
-    objs.update(loss.data[0], n)
-    top1.update(prec1.data[0], n)
-    top5.update(prec5.data[0], n)
+    objs.update(loss.data.item(), n)
+    top1.update(prec1.data.item(), n)
+    top5.update(prec5.data.item(), n)
 
     if step % args.report_freq == 0:
       logging.info('test %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)

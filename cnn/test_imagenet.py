@@ -19,7 +19,7 @@ from model import NetworkImageNet as Network
 
 
 parser = argparse.ArgumentParser("imagenet")
-parser.add_argument('--data', type=str, default='../data/imagenet/', help='location of the data corpus')
+parser.add_argument('--data', type=str, default='/data2/zhuo/imagenet/data/', help='location of the data corpus')
 parser.add_argument('--batch_size', type=int, default=128, help='batch size')
 parser.add_argument('--report_freq', type=float, default=100, help='report frequency')
 parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
@@ -56,7 +56,7 @@ def main():
   genotype = eval("genotypes.%s" % args.arch)
   model = Network(args.init_channels, CLASSES, args.layers, args.auxiliary, genotype)
   model = model.cuda()
-  model.load_state_dict(torch.load(args.model_path)['state_dict'])
+  model.load_state_dict(torch.load(args.model_path, map_location={'cuda:1':'cuda:0', 'cuda:2':'cuda:0', 'cuda:3':'cuda:0'})['state_dict'])
 
   logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
 
@@ -90,17 +90,19 @@ def infer(valid_queue, model, criterion):
   model.eval()
 
   for step, (input, target) in enumerate(valid_queue):
-    input = Variable(input, volatile=True).cuda()
-    target = Variable(target, volatile=True).cuda(async=True)
+    target = target.cuda(non_blocking=True)
+    with torch.no_grad():
+        input = Variable(input).cuda()
+        target = Variable(target)
 
     logits, _ = model(input)
     loss = criterion(logits, target)
 
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
     n = input.size(0)
-    objs.update(loss.data[0], n)
-    top1.update(prec1.data[0], n)
-    top5.update(prec5.data[0], n)
+    objs.update(loss.data.item(), n)
+    top1.update(prec1.data.item(), n)
+    top5.update(prec5.data.item(), n)
 
     if step % args.report_freq == 0:
       logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)

@@ -117,3 +117,6 @@ Session.vim
 *~
 # Auto-generated tag files
 tags
+**/_vimrc_local.vim
+data
+cnn/darts

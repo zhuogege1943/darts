@@ -92,7 +92,7 @@ def main():
 
   train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]), # data imbalanced spliting
       pin_memory=True, num_workers=2)
 
   valid_queue = torch.utils.data.DataLoader(
@@ -106,7 +106,6 @@ def main():
   architect = Architect(model, args)
 
   for epoch in range(args.epochs):
-    scheduler.step()
     lr = scheduler.get_lr()[0]
     logging.info('epoch %d lr %e', epoch, lr)
 
@@ -125,6 +124,7 @@ def main():
     logging.info('valid_acc %f', valid_acc)
 
     utils.save(model, os.path.join(args.save, 'weights.pt'))
+    scheduler.step()
 
 
 def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
@@ -151,13 +151,13 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
     loss = criterion(logits, target)
 
     loss.backward()
-    nn.utils.clip_grad_norm(model.parameters(), args.grad_clip)
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
 
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
-    objs.update(loss.data[0], n)
-    top1.update(prec1.data[0], n)
-    top5.update(prec5.data[0], n)
+    objs.update(loss.data.item(), n)
+    top1.update(prec1.data.item(), n)
+    top5.update(prec5.data.item(), n)
 
     if step % args.report_freq == 0:
       logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
@@ -180,9 +180,9 @@ def infer(valid_queue, model, criterion):
 
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
     n = input.size(0)
-    objs.update(loss.data[0], n)
-    top1.update(prec1.data[0], n)
-    top5.update(prec5.data[0], n)
+    objs.update(loss.data.item(), n)
+    top1.update(prec1.data.item(), n)
+    top5.update(prec5.data.item(), n)
 
     if step % args.report_freq == 0:
       logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
