@@ -167,9 +167,9 @@ def main():
 
 
 def train(train_queue, model, criterion, optimizer):
-  objs = utils.AvgrageMeter()
-  top1 = utils.AvgrageMeter()
-  top5 = utils.AvgrageMeter()
+  objs = utils.AverageMeter()
+  top1 = utils.AverageMeter()
+  top5 = utils.AverageMeter()
   model.train()
 
   for step, (input, target) in enumerate(train_queue):
@@ -202,9 +202,9 @@ def train(train_queue, model, criterion, optimizer):
 
 
 def infer(valid_queue, model, criterion):
-  objs = utils.AvgrageMeter()
-  top1 = utils.AvgrageMeter()
-  top5 = utils.AvgrageMeter()
+  objs = utils.AverageMeter()
+  top1 = utils.AverageMeter()
+  top5 = utils.AverageMeter()
   model.eval()
 
   for step, (input, target) in enumerate(valid_queue):

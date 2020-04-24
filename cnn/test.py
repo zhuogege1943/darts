@@ -75,9 +75,9 @@ def main():
 
 
 def infer(test_queue, model, criterion):
-  objs = utils.AvgrageMeter()
-  top1 = utils.AvgrageMeter()
-  top5 = utils.AvgrageMeter()
+  objs = utils.AverageMeter()
+  top1 = utils.AverageMeter()
+  top5 = utils.AverageMeter()
   model.eval()
 
   for step, (input, target) in enumerate(test_queue):
