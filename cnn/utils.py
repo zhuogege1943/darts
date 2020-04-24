@@ -6,21 +6,22 @@ import torchvision.transforms as transforms
 from torch.autograd import Variable
 
 
-class AvgrageMeter(object):
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.reset()
 
-  def __init__(self):
-    self.reset()
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
 
-  def reset(self):
-    self.avg = 0
-    self.sum = 0
-    self.cnt = 0
-
-  def update(self, val, n=1):
-    self.sum += val * n
-    self.cnt += n
-    self.avg = self.sum / self.cnt
-
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 def accuracy(output, target, topk=(1,)):
   maxk = max(topk)
@@ -91,8 +92,33 @@ def save_checkpoint(state, is_best, save):
     shutil.copyfile(filename, best_filename)
 
 
-def save(model, model_path):
-  torch.save(model.state_dict(), model_path)
+def search_save(root, checkpoint, checkpoint_path, msg):
+  checkpoint_dir = os.path.join(root, 'search_models')
+  os.makedirs(checkpoint_dir, exist_ok=True)
+  checkpoint_path = os.path.join(checkpoint_dir, checkpoint_path)
+  torch.save(checkpoint, checkpoint_path)
+
+  with open(os.path.join(checkpoint_dir, 'latest.txt'), 'w') as f:
+    f.write(checkpoint_path)
+
+  msg_path = os.path.join(checkpoint_dir, 'log.txt')
+  with open(msg_path, 'a') as f:
+    f.write(msg)
+
+def search_load(root):
+  checkpoint_dir = os.path.join(root, 'search_models')
+  latest_filename = os.path.join(checkpoint_dir, 'latest.txt')
+  if os.path.exists(latest_filename):
+    with open(latest_filename, 'r') as f:
+      checkpoint_path = f.readlines()[0].strip()
+  else:
+    return None
+    
+  checkpoint = None
+  if os.path.exists(checkpoint_path):
+    checkpoint = torch.load(checkpoint_path)
+
+  return checkpoint
 
 
 def load(model, model_path):

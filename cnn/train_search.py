@@ -5,7 +5,7 @@ import glob
 import numpy as np
 import torch
 import utils
-import logging
+import datetime
 import argparse
 import torch.nn as nn
 import torch.utils
@@ -31,6 +31,8 @@ parser.add_argument('--epochs', type=int, default=50, help='num of training epoc
 parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
 parser.add_argument('--layers', type=int, default=8, help='total number of layers')
 parser.add_argument('--model_path', type=str, default='saved_models', help='path to save the model')
+parser.add_argument('--resume', action='store_true',
+                    help='use latest checkpoint if have any (default: none)')
 parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
 parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
 parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
@@ -43,15 +45,8 @@ parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='lear
 parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
 args = parser.parse_args()
 
-args.save = 'search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
-utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
-
-log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-    format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
-fh.setFormatter(logging.Formatter(log_format))
-logging.getLogger().addHandler(fh)
+#args.save = 'search-{}-{}'.format(args.save, time.strftime("%Y%m%d-%H%M%S"))
+#utils.create_exp_dir(args.save, scripts_to_save=glob.glob('*.py'))
 
 
 CIFAR_CLASSES = 10
@@ -59,7 +54,6 @@ CIFAR_CLASSES = 10
 
 def main():
   if not torch.cuda.is_available():
-    logging.info('no gpu device available')
     sys.exit(1)
 
   np.random.seed(args.seed)
@@ -68,14 +62,13 @@ def main():
   torch.manual_seed(args.seed)
   cudnn.enabled=True
   torch.cuda.manual_seed(args.seed)
-  logging.info('gpu device = %d' % args.gpu)
-  logging.info("args = %s", args)
+  print(args)
 
   criterion = nn.CrossEntropyLoss()
   criterion = criterion.cuda()
   model = Network(args.init_channels, CIFAR_CLASSES, args.layers, criterion)
   model = model.cuda()
-  logging.info("param size = %fMB", utils.count_parameters_in_MB(model))
+  print("param size = %fMB", utils.count_parameters_in_MB(model))
 
   optimizer = torch.optim.SGD(
       model.parameters(),
@@ -105,32 +98,56 @@ def main():
 
   architect = Architect(model, args)
 
-  for epoch in range(args.epochs):
+  start_epoch = 0
+
+  ### Optionally resume from a checkpoint
+  if args.resume:
+    checkpoint = utils.search_load(args.save)
+    if checkpoint is not None:
+      start_epoch = checkpoint['epoch'] + 1
+      model.load_state_dict(checkpoint['state_dict'])
+      optimizer.load_state_dict(checkpoint['model_optimizer'])
+      architect.optimizer.load_state_dict(checkpoint['architect_optimizer'])
+      scheduler.load_state_dict(checkpoint['scheduler'])
+    print('epch: %d, scheduler\'s epoch: %d' % (start_epoch, scheduler.last_epoch))
+    
+  for epoch in range(start_epoch, args.epochs):
     lr = scheduler.get_lr()[0]
-    logging.info('epoch %d lr %e', epoch, lr)
 
     genotype = model.genotype()
-    logging.info('genotype = %s', genotype)
+    print(args)
+    print('genotype = %s', genotype)
 
     print(F.softmax(model.alphas_normal, dim=-1))
     print(F.softmax(model.alphas_reduce, dim=-1))
 
     # training
-    train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr)
-    logging.info('train_acc %f', train_acc)
+    train_acc, train_obj = train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch)
 
     # validation
     valid_acc, valid_obj = infer(valid_queue, model, criterion)
-    logging.info('valid_acc %f', valid_acc)
 
-    utils.save(model, os.path.join(args.save, 'weights.pt'))
+    msg = "Epoch %03d/%d: %.4f %.4f %.4f %.6f\ngenotype= %s\n\n" % \
+      (epoch, args.epochs, valid_acc, train_acc, train_obj, lr, genotype)
+    utils.search_save(args.save, {
+      'epoch': epoch,
+      'state_dict': model.state_dict(),
+      'model_optimizer': optimizer.state_dict(),
+      'architect_optimizer': architect.optimizer.state_dict(),
+      'scheduler': scheduler.state_dict(),
+      }, 'checkpoint_%03d.pth.tar' % epoch, msg)
+
     scheduler.step()
 
 
-def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
-  objs = utils.AvgrageMeter()
-  top1 = utils.AvgrageMeter()
-  top5 = utils.AvgrageMeter()
+def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, epoch):
+  objs = utils.AverageMeter()
+  top1 = utils.AverageMeter()
+  top5 = utils.AverageMeter()
+  batch_time = utils.AverageMeter()
+  data_time = utils.AverageMeter()
+
+  end = time.time()
 
   for step, (input, target) in enumerate(train_queue):
     model.train()
@@ -143,6 +160,9 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
     input_search, target_search = next(iter(valid_queue))
     input_search = Variable(input_search, requires_grad=False).cuda()
     target_search = Variable(target_search, requires_grad=False).cuda(async=True)
+
+    ### Measure data loading time
+    data_time.update(time.time() - end)
 
     architect.step(input, target, input_search, target_search, lr, optimizer, unrolled=args.unrolled)
 
@@ -159,8 +179,19 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr):
     top1.update(prec1.data.item(), n)
     top5.update(prec5.data.item(), n)
 
+    batch_time.update(time.time() - end)
+    end = time.time()
+
     if step % args.report_freq == 0:
-      logging.info('train %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
+        print('Epoch: [{0}][{1}/{2}]\t'
+              'Time {batch_time.val:.3f}\t'  # ({batch_time.avg:.3f}) '
+              'Data {data_time.val:.3f}\t'  # ({data_time.avg:.3f}) '
+              'Loss {loss.avg:.4f}\t'  # ({loss.avg:.4f}) '
+              'Prec@1 {top1.avg:.3f}\t'  # ({top1.avg:.3f}) '
+              'Prec@5 {top5.avg:.3f}\t'  # ({top5.avg:.3f})'
+              'lr {lr: .6f}\t'.format(
+                  epoch, step, len(train_queue), batch_time=batch_time,
+                  data_time=data_time, loss=objs, top1=top1, top5=top5, lr=lr))
 
   return top1.avg, objs.avg
 
@@ -172,8 +203,9 @@ def infer(valid_queue, model, criterion):
   model.eval()
 
   for step, (input, target) in enumerate(valid_queue):
-    input = Variable(input, volatile=True).cuda()
-    target = Variable(target, volatile=True).cuda(async=True)
+    with torch.no_grad():
+      input = Variable(input).cuda()
+      target = Variable(target).cuda(async=True)
 
     logits = model(input)
     loss = criterion(logits, target)
@@ -185,7 +217,7 @@ def infer(valid_queue, model, criterion):
     top5.update(prec5.data.item(), n)
 
     if step % args.report_freq == 0:
-      logging.info('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
+      print('valid %03d %e %f %f', step, objs.avg, top1.avg, top5.avg)
 
   return top1.avg, objs.avg
 
