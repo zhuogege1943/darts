@@ -59,7 +59,7 @@ class Architect(object):
         v.grad.data.copy_(g.data)
 
   def _construct_model_from_theta(self, theta):
-    model_new = self.model.new()
+    model_new = self.model.new() # already in cuda
     model_dict = self.model.state_dict()
 
     params, offset = {}, 0
@@ -71,7 +71,7 @@ class Architect(object):
     assert offset == len(theta)
     model_dict.update(params)
     model_new.load_state_dict(model_dict)
-    return model_new.cuda()
+    return model_new
 
   def _hessian_vector_product(self, vector, input, target, r=1e-2):
     R = r / _concat(vector).norm()

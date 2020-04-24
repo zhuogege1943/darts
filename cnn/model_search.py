@@ -5,6 +5,7 @@ from operations import *
 from torch.autograd import Variable
 from genotypes import PRIMITIVES
 from genotypes import Genotype
+from utils import MyDataParallel
 
 
 class MixedOp(nn.Module):
@@ -96,6 +97,7 @@ class Network(nn.Module):
 
   def new(self):
     model_new = Network(self._C, self._num_classes, self._layers, self._criterion).cuda()
+    model_new = MyDataParallel(model_new).cuda()
     for x, y in zip(model_new.arch_parameters(), self.arch_parameters()):
         x.data.copy_(y.data)
     return model_new

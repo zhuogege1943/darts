@@ -16,6 +16,7 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from model_search import Network
 from architect import Architect
+from utils import MyDataParallel
 
 
 parser = argparse.ArgumentParser("cifar")
@@ -69,7 +70,7 @@ def main():
   criterion = nn.CrossEntropyLoss()
   criterion = criterion.cuda()
   model = Network(args.init_channels, CIFAR_CLASSES, args.layers, criterion)
-  model = model.cuda()
+  model = MyDataParallel(model).cuda()
   print("param size = %fMB", utils.count_parameters_in_MB(model))
 
   optimizer = torch.optim.SGD(
@@ -156,12 +157,14 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
     n = input.size(0)
 
     input = Variable(input, requires_grad=False).cuda()
-    target = Variable(target, requires_grad=False).cuda(async=True)
+    target = target.cuda(non_blocking=True)
+    target = Variable(target, requires_grad=False)
 
     # get a random minibatch from the search queue with replacement
     input_search, target_search = next(iter(valid_queue))
     input_search = Variable(input_search, requires_grad=False).cuda()
-    target_search = Variable(target_search, requires_grad=False).cuda(async=True)
+    target_search = target_search.cuda(non_blocking=True)
+    target_search = Variable(target_search, requires_grad=False)
 
     ### Measure data loading time
     data_time.update(time.time() - end)
