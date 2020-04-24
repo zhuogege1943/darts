@@ -52,14 +52,14 @@ args = parser.parse_args()
 
 
 CIFAR_CLASSES = 10
-
+os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 def main():
   if not torch.cuda.is_available():
     sys.exit(1)
 
   np.random.seed(args.seed)
-  torch.cuda.set_device(args.gpu)
+  #torch.cuda.set_device(args.gpu)
   cudnn.benchmark = True
   torch.manual_seed(args.seed)
   cudnn.enabled=True
