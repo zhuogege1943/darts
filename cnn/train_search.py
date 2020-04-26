@@ -16,6 +16,7 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from model_search import Network
 from architect import Architect
+from utils import MyDataParallel
 
 
 
@@ -27,7 +28,7 @@ parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min 
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
 parser.add_argument('--report_freq', type=float, default=10, help='report frequency')
-parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+parser.add_argument('--gpu', type=str, default='0', help='gpu device id')
 parser.add_argument('--epochs', type=int, default=50, help='num of training epochs')
 parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
 parser.add_argument('--layers', type=int, default=8, help='total number of layers')
@@ -53,14 +54,14 @@ args = parser.parse_args()
 
 
 CIFAR_CLASSES = 10
-
+os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
 def main():
   if not torch.cuda.is_available():
     sys.exit(1)
 
   np.random.seed(args.seed)
-  torch.cuda.set_device(args.gpu)
+  #torch.cuda.set_device(args.gpu)
   cudnn.benchmark = True
   torch.manual_seed(args.seed)
   cudnn.enabled=True
@@ -70,7 +71,7 @@ def main():
   criterion = nn.CrossEntropyLoss()
   criterion = criterion.cuda()
   model = Network(args.init_channels, CIFAR_CLASSES, args.layers, criterion)
-  model = model.cuda()
+  model = MyDataParallel(model).cuda()
   print("param size = %fMB", utils.count_parameters_in_MB(model))
 
   optimizer = torch.optim.SGD(
@@ -160,12 +161,14 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
     n = input.size(0)
 
     input = Variable(input, requires_grad=False).cuda()
-    target = Variable(target, requires_grad=False).cuda(async=True)
+    target = target.cuda(non_blocking=True)
+    target = Variable(target, requires_grad=False)
 
     # get a random minibatch from the search queue with replacement
     input_search, target_search = next(iter(valid_queue))
     input_search = Variable(input_search, requires_grad=False).cuda()
-    target_search = Variable(target_search, requires_grad=False).cuda(async=True)
+    target_search = target_search.cuda(non_blocking=True)
+    target_search = Variable(target_search, requires_grad=False)
 
     ### Measure data loading time
     data_time.update(time.time() - end)

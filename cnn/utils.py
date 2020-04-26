@@ -5,6 +5,12 @@ import shutil
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 
+class MyDataParallel(torch.nn.DataParallel):
+  def __getattr__(self, name):
+    try:
+      return super().__getattr__(name)
+    except AttributeError:
+      return getattr(self.module, name)
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
