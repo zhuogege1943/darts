@@ -1,11 +1,11 @@
 import os
 import sys
 import time
+import datetime
 import glob
 import numpy as np
 import torch
 import utils
-import datetime
 import argparse
 import torch.nn as nn
 import torch.utils
@@ -16,6 +16,7 @@ import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 from model_search import Network
 from architect import Architect
+
 
 
 parser = argparse.ArgumentParser("cifar")
@@ -108,10 +109,11 @@ def main():
     if checkpoint is not None:
       start_epoch = checkpoint['epoch'] + 1
       model.load_state_dict(checkpoint['state_dict'])
+      model.copy_arch(checkpoint['arch_param'])
       optimizer.load_state_dict(checkpoint['model_optimizer'])
       architect.optimizer.load_state_dict(checkpoint['architect_optimizer'])
       scheduler.load_state_dict(checkpoint['scheduler'])
-    print('epch: %d, scheduler\'s epoch: %d' % (start_epoch, scheduler.last_epoch))
+    #print('epch: %d, scheduler\'s epoch: %d' % (start_epoch, scheduler.last_epoch))
     
   for epoch in range(start_epoch, args.epochs):
     lr = scheduler.get_lr()[0]
@@ -129,15 +131,17 @@ def main():
     # validation
     valid_acc, valid_obj = infer(valid_queue, model, criterion)
 
-    msg = "Epoch %03d/%d: %.4f %.4f %.4f %.6f\ngenotype= %s\n\n" % \
-      (epoch, args.epochs, valid_acc, train_acc, train_obj, lr, genotype)
-    utils.search_save(args.save, {
-      'epoch': epoch,
-      'state_dict': model.state_dict(),
-      'model_optimizer': optimizer.state_dict(),
-      'architect_optimizer': architect.optimizer.state_dict(),
-      'scheduler': scheduler.state_dict(),
-      }, 'checkpoint_%03d.pth.tar' % epoch, msg)
+    msg = "Epoch %03d/%d: %.4f %.4f %.4f %.6f\ngenotype= %s\nTime: %s\n" % \
+      (epoch, args.epochs, valid_acc, train_acc, train_obj, lr, genotype, datetime.datetime.now())
+    if args.resume:
+      utils.search_save(args.save, {
+        'epoch': epoch,
+        'state_dict': model.state_dict(),
+        'arch_param': model.arch_parameters(),
+        'model_optimizer': optimizer.state_dict(),
+        'architect_optimizer': architect.optimizer.state_dict(),
+        'scheduler': scheduler.state_dict(),
+        }, 'checkpoint_%03d.pth.tar' % epoch, msg)
 
     scheduler.step()
 

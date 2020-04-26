@@ -130,6 +130,10 @@ class Network(nn.Module):
   def arch_parameters(self):
     return self._arch_parameters
 
+  def copy_arch(self, arch_param):
+    for v, a in zip(self.arch_parameters(), arch_param):
+      v.data.copy_(a.data)
+
   def genotype(self):
 
     def _parse(weights):

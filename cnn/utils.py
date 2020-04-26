@@ -100,6 +100,7 @@ def search_save(root, checkpoint, checkpoint_path, msg):
 
   with open(os.path.join(checkpoint_dir, 'latest.txt'), 'w') as f:
     f.write(checkpoint_path)
+    print('%s saved' % checkpoint_path)
 
   msg_path = os.path.join(checkpoint_dir, 'log.txt')
   with open(msg_path, 'a') as f:
@@ -117,6 +118,7 @@ def search_load(root):
   checkpoint = None
   if os.path.exists(checkpoint_path):
     checkpoint = torch.load(checkpoint_path)
+    print('%s loaded successfully' % checkpoint_path)
 
   return checkpoint
 
