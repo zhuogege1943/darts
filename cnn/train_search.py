@@ -72,10 +72,11 @@ def main():
   criterion = criterion.cuda()
   model = Network(args.init_channels, CIFAR_CLASSES, args.layers, criterion)
   model = MyDataParallel(model).cuda()
+
   print("param size = %fMB", utils.count_parameters_in_MB(model))
 
   optimizer = torch.optim.SGD(
-      model.parameters(),
+      model.weight_parameters(),
       args.learning_rate,
       momentum=args.momentum,
       weight_decay=args.weight_decay)
@@ -110,7 +111,6 @@ def main():
     if checkpoint is not None:
       start_epoch = checkpoint['epoch'] + 1
       model.load_state_dict(checkpoint['state_dict'])
-      model.copy_arch(checkpoint['arch_param'])
       optimizer.load_state_dict(checkpoint['model_optimizer'])
       architect.optimizer.load_state_dict(checkpoint['architect_optimizer'])
       scheduler.load_state_dict(checkpoint['scheduler'])
@@ -138,7 +138,6 @@ def main():
       utils.search_save(args.save, {
         'epoch': epoch,
         'state_dict': model.state_dict(),
-        'arch_param': model.arch_parameters(),
         'model_optimizer': optimizer.state_dict(),
         'architect_optimizer': architect.optimizer.state_dict(),
         'scheduler': scheduler.state_dict(),
@@ -180,7 +179,7 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
     loss = criterion(logits, target)
 
     loss.backward()
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+    nn.utils.clip_grad_norm_(model.weight_parameters(), args.grad_clip)
     optimizer.step()
 
     prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))

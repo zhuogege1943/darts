@@ -96,10 +96,10 @@ class Network(nn.Module):
     self._initialize_alphas()
 
   def new(self):
-    model_new = Network(self._C, self._num_classes, self._layers, self._criterion).cuda()
+    model_new = Network(self._C, self._num_classes, self._layers, self._criterion)
     model_new = MyDataParallel(model_new).cuda()
-    for x, y in zip(model_new.arch_parameters(), self.arch_parameters()):
-        x.data.copy_(y.data)
+    #for x, y in zip(model_new.arch_parameters(), self.arch_parameters()):
+    #    x.data.copy_(y.data)
     return model_new
 
   def forward(self, input):
@@ -122,8 +122,8 @@ class Network(nn.Module):
     k = sum(1 for i in range(self._steps) for n in range(2+i))
     num_ops = len(PRIMITIVES)
 
-    self.alphas_normal = Variable(1e-3*torch.randn(k, num_ops).cuda(), requires_grad=True)
-    self.alphas_reduce = Variable(1e-3*torch.randn(k, num_ops).cuda(), requires_grad=True)
+    self.alphas_normal = nn.Parameter(1e-3*torch.randn(k, num_ops))
+    self.alphas_reduce = nn.Parameter(1e-3*torch.randn(k, num_ops))
     self._arch_parameters = [
       self.alphas_normal,
       self.alphas_reduce,
@@ -131,6 +131,13 @@ class Network(nn.Module):
 
   def arch_parameters(self):
     return self._arch_parameters
+
+  def weight_parameters(self):
+    weights = []
+    for pname, p in self.named_parameters():
+      if 'alphas' not in pname:
+        weights.append(p)
+    return weights
 
   def copy_arch(self, arch_param):
     for v, a in zip(self.arch_parameters(), arch_param):

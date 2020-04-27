@@ -117,7 +117,7 @@ Session.vim
 *~
 # Auto-generated tag files
 tags
-**/.vimrc
+**/.localvimrc
 data
 cnn/darts
 **/zhuo_*
